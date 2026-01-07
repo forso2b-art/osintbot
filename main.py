@@ -43,7 +43,7 @@ except ImportError:
 # ==================== CONFIGURATION ====================
 BOT_TOKEN = os.getenv("BOT_TOKEN", "YOUR_BOT_TOKEN_HERE")  # Obtain from @BotFather
 OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY", "YOUR_OPENROUTER_KEY_HERE")
-ADMIN_ID = int(os.getenv("ADMIN_ID", 103161998))  # Your Telegram user ID
+ADMIN_ID = int(os.getenv("ADMIN_ID", 8513112712))  # Your Telegram user ID
 
 # API endpoints (no authentication required)
 IPAPI_URL = "https://ipapi.co/{ip}/json/"
