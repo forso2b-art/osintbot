@@ -22,7 +22,6 @@ from telegram import (
     InlineKeyboardButton,
     InlineKeyboardMarkup,
     Update,
-    ReplyKeyboardRemove,
 )
 from telegram.ext import (
     Application,
@@ -68,12 +67,8 @@ logger = logging.getLogger(__name__)
 # ==================== OSINT FUNCTIONS ====================
 
 async def ip_geolocation(ip: str) -> str:
-    """
-    Get geolocation data for an IP address using ipapi.co (no auth needed).
-    Rate limit: ~1000 requests/day.
-    """
+    """Get geolocation data for an IP address using ipapi.co."""
     try:
-        # Validate IP address format
         if not re.match(r'^\d{1,3}(\.\d{1,3}){3}$', ip):
             return "❌ Invalid IP address format. Please use IPv4 format (e.g., 8.8.8.8)"
         
@@ -81,8 +76,6 @@ async def ip_geolocation(ip: str) -> str:
             async with session.get(IPAPI_URL.format(ip=ip), timeout=10) as resp:
                 if resp.status == 200:
                     data = await resp.json()
-                    
-                    # Format response with emojis
                     return (
                         f"🌐 **IP Geolocation Results** 🌐\n\n"
                         f"📍 **IP Address:** `{data.get('ip', 'N/A')}`\n"
@@ -106,23 +99,17 @@ async def ip_geolocation(ip: str) -> str:
         return f"❌ Error retrieving geolocation: {str(e)[:100]}"
 
 async def whois_lookup(domain: str) -> str:
-    """
-    Perform WHOIS lookup using the public who-dat API (no auth).
-    """
+    """Perform WHOIS lookup using the public who-dat API."""
     try:
-        # Clean domain name
         domain = domain.lower().replace('http://', '').replace('https://', '').replace('www.', '').split('/')[0]
         
         async with aiohttp.ClientSession() as session:
             async with session.get(WHOIS_URL.format(domain), timeout=10) as resp:
                 if resp.status == 200:
                     data = await resp.json()
-                    
-                    # Format dates nicely
                     created = data.get('created', 'N/A')
                     updated = data.get('updated', 'N/A')
                     expires = data.get('expires', 'N/A')
-                    
                     return (
                         f"🔍 **WHOIS Lookup Results** 🔍\n\n"
                         f"🌐 **Domain:** `{domain}`\n"
@@ -145,9 +132,7 @@ async def whois_lookup(domain: str) -> str:
         return f"❌ Error retrieving WHOIS data: {str(e)[:100]}"
 
 async def username_check(username: str) -> str:
-    """
-    Check username across multiple platforms using WhatsMyName data.
-    """
+    """Check username across multiple platforms using WhatsMyName data."""
     try:
         async with aiohttp.ClientSession() as session:
             async with session.get(WHATSMYNAME_JSON, timeout=15) as resp:
@@ -159,17 +144,15 @@ async def username_check(username: str) -> str:
         found_count = 0
         
         for site in data.get("sites", []):
-            url_check = site.get("uri_check", "").format(account=username)
             url = site.get("uri", "").format(account=username)
             
-            # Skip invalid URLs
             if not url.startswith('http'):
                 continue
             
             results.append(f"🔗 **{site.get('name', 'Unknown')}:** {url}")
             found_count += 1
             
-            if found_count >= 20:  # Limit results
+            if found_count >= 20:
                 break
         
         if results:
@@ -188,11 +171,8 @@ async def username_check(username: str) -> str:
         return f"❌ Error checking username: {str(e)[:100]}"
 
 async def google_search_query(query: str, num_results: int = 10) -> str:
-    """
-    Perform Google search using public APIs (no authentication).
-    """
+    """Perform search using DuckDuckGo as a proxy."""
     try:
-        # Using DuckDuckGo HTML as a search proxy (Google alternative)
         search_url = f"https://html.duckduckgo.com/html/?q={quote_plus(query)}"
         
         headers = {
@@ -205,27 +185,23 @@ async def google_search_query(query: str, num_results: int = 10) -> str:
                     return f"❌ Search failed with status {resp.status}"
                 
                 html = await resp.text()
-                
-                # Simple HTML parsing for search results
                 results = []
                 pattern = r'class="result__title">.*?<a[^>]*href="([^"]*)[^>]*>([^<]*)'
                 matches = re.findall(pattern, html, re.DOTNOTASCII)
                 
                 for url, title in matches[:num_results]:
                     if url and title:
-                        # Clean up the title
                         title = re.sub(r'<[^>]+>', '', title).strip()
                         results.append(f"• **{title}**\n  {url}")
                 
                 if results:
                     return (
-                        f"🔎 **Google Search Results** 🔎\n\n"
+                        f"🔎 **Search Results** 🔎\n\n"
                         f"**Query:** {query}\n\n" +
                         "\n\n".join(results) +
                         f"\n\n📊 Found {len(results)} results"
                     )
                 else:
-                    # Alternative: Use DuckDuckGo Instant Answer API
                     ddg_url = f"https://api.duckduckgo.com/?q={quote_plus(query)}&format=json"
                     async with session.get(ddg_url, timeout=10) as ddg_resp:
                         if ddg_resp.status == 200:
@@ -246,9 +222,7 @@ async def google_search_query(query: str, num_results: int = 10) -> str:
         return f"❌ Search failed: {str(e)[:100]}"
 
 async def openrouter_analysis(text: str) -> str:
-    """
-    Send text to OpenRouter AI for analysis.
-    """
+    """Send text to OpenRouter AI for analysis."""
     if not OPENROUTER_API_KEY or OPENROUTER_API_KEY == "YOUR_OPENROUTER_KEY_HERE":
         return "❌ OpenRouter API key is not configured.\nPlease set OPENROUTER_API_KEY in .env file."
     
@@ -304,22 +278,14 @@ async def openrouter_analysis(text: str) -> str:
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Send a welcome message with an inline keyboard."""
     keyboard = [
-        [
-            InlineKeyboardButton("🌐 IP Geolocation", callback_data="ip_geo"),
-            InlineKeyboardButton("🔍 WHOIS Lookup", callback_data="whois"),
-        ],
-        [
-            InlineKeyboardButton("👤 Username Check", callback_data="username"),
-            InlineKeyboardButton("🔎 Google Search", callback_data="google"),
-        ],
-        [
-            InlineKeyboardButton("🤖 AI Analysis", callback_data="ai_analysis"),
-            InlineKeyboardButton("🛡️ Admin Panel", callback_data="admin_panel"),
-        ],
-        [
-            InlineKeyboardButton("ℹ️ Help", callback_data="help"),
-            InlineKeyboardButton("📊 Status", callback_data="status"),
-        ],
+        [InlineKeyboardButton("🌐 IP Geolocation", callback_data="ip_geo"),
+         InlineKeyboardButton("🔍 WHOIS Lookup", callback_data="whois")],
+        [InlineKeyboardButton("👤 Username Check", callback_data="username"),
+         InlineKeyboardButton("🔎 Google Search", callback_data="google")],
+        [InlineKeyboardButton("🤖 AI Analysis", callback_data="ai_analysis"),
+         InlineKeyboardButton("🛡️ Admin Panel", callback_data="admin_panel")],
+        [InlineKeyboardButton("ℹ️ Help", callback_data="help"),
+         InlineKeyboardButton("📊 Status", callback_data="status")],
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
     
@@ -428,7 +394,6 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("Please use /start to see available options.")
         return
     
-    # Show "processing" status
     processing_msg = await update.message.reply_text("⏳ Processing your request...")
     
     result = ""
@@ -443,20 +408,15 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif awaiting == "ai":
         result = await openrouter_analysis(text)
     
-    # Clear the awaiting state
     context.user_data["awaiting"] = None
-    
-    # Delete the "processing" message and send the result
     await processing_msg.delete()
     
-    # Split long messages to avoid Telegram limits
     if len(result) > 4000:
         for i in range(0, len(result), 4000):
             await update.message.reply_text(result[i:i+4000], parse_mode="Markdown")
     else:
         await update.message.reply_text(result, parse_mode="Markdown")
 
-# Command handlers (alternative to inline buttons)
 async def ip_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Command: /ip <IP>"""
     if not context.args:
@@ -516,7 +476,6 @@ async def ai_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 class BotAdmin:
     """Admin panel functionality."""
-    
     def __init__(self):
         self.user_stats = {}
         self.broadcast_messages = []
@@ -526,7 +485,7 @@ class BotAdmin:
         return {
             "total_users": len(self.user_stats),
             "active_users": sum(1 for u in self.user_stats.values() if u.get('last_active')),
-            "commands_today": 0,  # Would need tracking
+            "commands_today": 0,
             "uptime": "24/7"
         }
 
@@ -552,7 +511,7 @@ async def admin_panel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     reply_markup = InlineKeyboardMarkup(keyboard)
     
     text = (
-        "🛡️ **Admin Control Panel** 🛡️\n\n"
+        f"🛡️ **Admin Control Panel** 🛡️\n\n"
         f"**Admin ID:** `{ADMIN_ID}`\n"
         f"**Bot Status:** ✅ Online\n"
         f"**Last Updated:** {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n\n"
@@ -635,18 +594,12 @@ async def admin_restart(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def back_to_main(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Return to main menu."""
     keyboard = [
-        [
-            InlineKeyboardButton("🌐 IP Geolocation", callback_data="ip_geo"),
-            InlineKeyboardButton("🔍 WHOIS Lookup", callback_data="whois"),
-        ],
-        [
-            InlineKeyboardButton("👤 Username Check", callback_data="username"),
-            InlineKeyboardButton("🔎 Google Search", callback_data="google"),
-        ],
-        [
-            InlineKeyboardButton("🤖 AI Analysis", callback_data="ai_analysis"),
-            InlineKeyboardButton("🛡️ Admin Panel", callback_data="admin_panel"),
-        ],
+        [InlineKeyboardButton("🌐 IP Geolocation", callback_data="ip_geo"),
+         InlineKeyboardButton("🔍 WHOIS Lookup", callback_data="whois")],
+        [InlineKeyboardButton("👤 Username Check", callback_data="username"),
+         InlineKeyboardButton("🔎 Google Search", callback_data="google")],
+        [InlineKeyboardButton("🤖 AI Analysis", callback_data="ai_analysis"),
+         InlineKeyboardButton("🛡️ Admin Panel", callback_data="admin_panel")],
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
     
@@ -656,11 +609,45 @@ async def back_to_main(update: Update, context: ContextTypes.DEFAULT_TYPE):
         reply_markup=reply_markup
     )
 
+# ==================== ERROR HANDLER ====================
+
+async def error_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Handle errors in the telegram bot."""
+    logger.error(f"Exception while handling an update: {context.error}")
+    
+    if update and update.effective_user:
+        try:
+            await update.effective_user.send_message(
+                "❌ An error occurred while processing your request. Please try again later."
+            )
+        except Exception as e:
+            logger.error(f"Failed to send error message: {e}")
+
 # ==================== MAIN ====================
 
 def main():
     """Start the bot."""
-    # Create Application
+    if BOT_TOKEN == "YOUR_BOT_TOKEN_HERE":
+        print("❌ ERROR: BOT_TOKEN is not set!")
+        print("Please set BOT_TOKEN in .env file or replace 'YOUR_BOT_TOKEN_HERE' with your actual bot token.")
+        sys.exit(1)
+    
+    print("\n" + "=" * 50)
+    print("🚀 OSINT Bot is starting...")
+    print(f"🤖 Bot Token: {'✅ Set' if BOT_TOKEN != 'YOUR_BOT_TOKEN_HERE' else '❌ NOT SET'}")
+    print(f"🔑 OpenRouter Key: {'✅ Set' if OPENROUTER_API_KEY != 'YOUR_OPENROUTER_KEY_HERE' else '❌ NOT SET'}")
+    print(f"🛡️ Admin ID: {ADMIN_ID}")
+    print("=" * 50)
+    print("📝 Logs are being written to bot.log")
+    print("🔄 Bot is running. Press Ctrl+C to stop.")
+    print("=" * 50 + "\n")
+    
+    logger.info("=" * 50)
+    logger.info("OSINT Bot starting...")
+    logger.info(f"Admin ID: {ADMIN_ID}")
+    logger.info("=" * 50)
+    
+    # Create Application with persistence
     application = Application.builder().token(BOT_TOKEN).build()
     
     # Command handlers
@@ -688,34 +675,14 @@ def main():
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
     
     # Error handler
-    application.add_error_handler(lambda u, c: logger.error(f"Update {u} caused error {c.error}"))
+    application.add_error_handler(error_handler)
     
     # Start the bot
-    logger.info("=" * 50)
-    logger.info("OSINT Bot starting...")
-    logger.info(f"Admin ID: {ADMIN_ID}")
-    logger.info(f"Bot Username: @{application.bot.username}")
-    logger.info("=" * 50)
-    
-    print("\n" + "=" * 50)
-    print("🚀 OSINT Bot is starting...")
-    print(f"🤖 Bot Token: {'✅ Set' if BOT_TOKEN != 'YOUR_BOT_TOKEN_HERE' else '❌ NOT SET'}")
-    print(f"🔑 OpenRouter Key: {'✅ Set' if OPENROUTER_API_KEY != 'YOUR_OPENROUTER_KEY_HERE' else '❌ NOT SET'}")
-    print(f"🛡️ Admin ID: {ADMIN_ID}")
-    print("=" * 50)
-    print("📝 Logs are being written to bot.log")
-    print("🔄 Bot is running. Press Ctrl+C to stop.")
-    print("=" * 50 + "\n")
-    
-    application.run_polling(
-        allowed_updates=Update.ALL_TYPES,
-        drop_pending_updates=True,
-        close_loop=False
-    )
-
-if __name__ == "__main__":
     try:
-        main()
+        application.run_polling(
+            allowed_updates=Update.ALL_TYPES,
+            drop_pending_updates=True
+        )
     except KeyboardInterrupt:
         logger.info("Bot stopped by user")
         print("\n👋 Bot stopped gracefully")
@@ -723,3 +690,6 @@ if __name__ == "__main__":
         logger.error(f"Fatal error: {e}")
         print(f"❌ Fatal error: {e}")
         sys.exit(1)
+
+if __name__ == "__main__":
+    main()
